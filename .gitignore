@@ -1,0 +1,7 @@
+# Ignore all files under the data folder with the .out suffix
+data/*.out
+
+# Ignore all .slurm files
+*.slurm
+data/*.slurm
+

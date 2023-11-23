@@ -13,7 +13,7 @@ from transformers import (RobertaConfig, RobertaModel,
                           DPRContextEncoder, DPRQuestionEncoder)
 
 import torch.nn.functional as F
-from IPython import embed
+#from IPython import embed
 import time
 
 
@@ -57,14 +57,19 @@ class ANCE(RobertaForSequenceClassification):
             return emb_all[:, 0]
     
     def masked_mean(self, t, mask):
+        """This method calculates the mean of a tensor t along 
+        the first axis (axis=1), but only for elements 
+        where the corresponding value in the mask is true (non-zero)."""
         s = torch.sum(t * mask.unsqueeze(-1).float(), axis=1)
+        # s is a tensor of the sums of t where the mask is non-zero
         d = mask.sum(axis=1, keepdim=True).float()
+        # d is the number of non-zero entries in mask
         return s / d
     
     def forward(self, input_ids, attention_mask, wrap_pooler=False):
         return self.query_emb(input_ids, attention_mask)
       
- def load_model(model_type, model_path):
+def load_model(model_type, model_path):
     if model_type == "ANCE_Query" or model_type == "ANCE_Passage":
         config = RobertaConfig.from_pretrained(
             model_path,

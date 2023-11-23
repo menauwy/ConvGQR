@@ -1,15 +1,15 @@
 # ConvGQR
-This is the temporary repository of our ACL 2023 accepted paper - ConvGQR: Generative Query Reformulation for Conversational Search.
+This is a reproduce work from ConvGPR, a ACL 2023 accepted paper - ConvGQR: Generative Query Reformulation for Conversational Search.
 
 # Environment Dependency
 
 Main packages:
-- python 3.8
-- torch 1.8.1
-- transformer 4.2.0
-- numpy 1.22
 - faiss-gpu 1.7.2
 - pyserini 0.16
+- torch 1.8.1
+- python 3.8 #3.9
+- transformers 4.2.0 #4.35.2 in pyserini 0.16
+- numpy 1.22 #1.26
 
 # Runing Steps
 

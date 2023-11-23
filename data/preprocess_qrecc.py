@@ -1,4 +1,13 @@
-from IPython import embed
+"""
+QRECC dataset has 3 passage collection sources.
+* Seems that they use zenodo version 2021-10-01: scai-qrecc21-test-turns.json
+1. First need to generate a unified passage collection file pid2rawpid.pkl. 
+2. Second need to generate a qrel file for the test set. but why just test set?
+3. Third need to generate train and test files. Check the 'cur_utt_text' part --> CONQRR, so and ctx_query_utt. Also negative sampling for the training process.
+* They use previous turns positive docs as the negatives of the current turn --> doubt that.
+* They don't use bm25 hard negatives for training.
+"""
+#from IPython import embed
 import json
 import os
 import sys
@@ -28,6 +37,7 @@ def gen_qrecc_passage_collection(input_passage_dir, output_file, pid2rawpid_path
     - input_passage_dir = "collection-paragraph"
     - output_file = "qrecc_collection.tsv"
     - pid2rawpid_path = "pid2rawpid.pkl"
+    read all 3 passage collection files and store all in a tsv and pickle file with the format of 'pid/tab passage'
     '''
     def process_qrecc_per_dir(dir_path, pid, pid2rawpid, fw):
         filenames = os.listdir(dir_path)
@@ -73,6 +83,8 @@ def gen_qrecc_qrel(input_test_file, output_qrel_file, pid2rawpid_path):
     - input_test_file = "scai-qrecc21-test-turns.json"
     - pid2rawpid_path = "pid2rawpid.pkl"
     - output_qrel_file = "qrecc_qrel.tsv"
+    qrel file with the format: query_id\iteration=0\tdoc_id\trelevance_score
+    QReCC-Test Truth passges are set to relevance score 1
     '''
     with open(input_test_file, "r") as f:
         data = json.load(f)
@@ -128,7 +140,8 @@ def gen_qrecc_train_test_files(train_inputfile,
                 sample_id = "{}_{}_{}".format(sample_title, line['Conversation_no'], line['Turn_no'])
                 record["sample_id"] = sample_id
                 record["source"] = line["Conversation_source"]
-           
+
+                # for turn 1 (initial turn), Question should be the same with Truth_rewrite
                 cur_utt_text = line["Question"] if int(line['Turn_no']) != 1 else line["Truth_rewrite"] # according to the paper of CONQRR
                 sid2utt[sample_id] = cur_utt_text
                 record["cur_utt_text"] = cur_utt_text
@@ -446,26 +459,31 @@ def statis_info(inputfile, statis_oracle):
 
 
 if __name__ == "__main__":
-    input_passage_dir = "collection-paragraph"
-    output_file = "new_preprocessed/qrecc_collection.tsv"
-    pid2rawpid_path = "new_preprocessed/pid2rawpid.pkl"
-    gen_qrecc_passage_collection(input_passage_dir, output_file, pid2rawpid_path):
+    # original local data dir
+    # dataset_dir = "/home/wangym/data1/dataset/qrecc/"
+    # data dir in /scratchdata on the assigned computing node
+    dataset_dir = "/scratcgdata/{}/{}/".format(os.environ["SLURM_JOB_USER"], os.environ["SLURM_JOB_ID"])
+
+    input_passage_dir = dataset_dir + "collection-paragraph"
+    output_file = dataset_dir + "new_preprocessed/qrecc_collection.tsv"
+    pid2rawpid_path = dataset_dir + "new_preprocessed/pid2rawpid.pkl"
+    gen_qrecc_passage_collection(input_passage_dir, output_file, pid2rawpid_path)
     
-    train_inputfile = "scai-qrecc21-training-turns.json"
-    test_inputfile = "scai-qrecc21-test-turns.json"
-    train_outputfile = "new_preprocessed/train.json"
-    test_outputfile = "new_preprocessed/test.json"
-    pid2rawpid_path = "pid2rawpid.pkl"
+    train_inputfile = dataset_dir + "scai-qrecc21-training-turns.json"
+    test_inputfile = dataset_dir + "scai-qrecc21-test-turns.json"
+    train_outputfile = dataset_dir + "new_preprocessed/train.json"
+    test_outputfile = dataset_dir + "new_preprocessed/test.json"
+    pid2rawpid_path = dataset_dir + "pid2rawpid.pkl"
     gen_qrecc_train_test_files(train_inputfile, test_inputfile, train_outputfile, test_outputfile, pid2rawpid_path)
 
-    input_test_file = "scai-qrecc21-test-turns.json"
-    pid2rawpid_path = "pid2rawpid.pkl"
-    output_qrel_file = "new_preprocessed/qrecc_qrel.tsv"
+    input_test_file = dataset_dir + "scai-qrecc21-test-turns.json"
+    pid2rawpid_path = dataset_dir + "pid2rawpid.pkl"
+    output_qrel_file = dataset_dir + "new_preprocessed/qrecc_qrel.tsv"
     gen_qrecc_qrel(input_test_file, output_qrel_file, pid2rawpid_path)
     
-    qrecc_collection_path = "qrecc_collection.tsv"
-    train_inputfile = "new_preprocessed/train.json"
-    train_outputfile_with_doc = "new_preprocessed/train_with_doc.json"
+    qrecc_collection_path = dataset_dir + "qrecc_collection.tsv"
+    train_inputfile = dataset_dir + "new_preprocessed/train.json"
+    train_outputfile_with_doc = dataset_dir + "new_preprocessed/train_with_doc.json"
     extract_doc_content_of_random_negs_for_train_file(qrecc_collection_path, train_inputfile, train_outputfile_with_doc)
 
     pass

@@ -7,7 +7,7 @@
 #SBATCH --output=%x_%j.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=15
-#SBATCH --mem=50G
+#SBATCH --mem=150G
 #SBATCH --gres=gpu:4g.40gb:1
 
 # making sure we load necessary module and activate right environment
@@ -23,7 +23,7 @@ scratch_dir="/scratchdata/${SLURM_JOB_USER}/${SLURM_JOB_ID}"
 
 mkdir -p $scratch_dir
 echo "## Scratch_dir is: $scratch_dir"
-cp -r $data_dir/* $scratch_dir
+#cp -r $data_dir/* $scratch_dir
 
 # test path and CUDA device
 # # the pwd is the directory where the script is located
@@ -37,5 +37,6 @@ nvidia-smi
 echo "## Running test"
 python3 preprocess_qrecc.py
 
+echo "## Done!"
 # # store data back to local , only copying files that have changed
-rsync -av --update $scratch_dir/* $data_dir
+#rsync -av --update $scratch_dir/* $data_dir

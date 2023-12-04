@@ -72,7 +72,7 @@ def gen_qrecc_passage_collection(input_passage_dir, output_file, pid2rawpid_path
         pid, pid2rawpid = process_qrecc_per_dir(pdir3, pid, pid2rawpid, fw)
         logger.info("{} process ok!".format(pdir3))
 
-    pstore(pid2rawpid, pid2rawpid_path, True)
+    pstore(pid2rawpid, pid2rawpid_path)
 
     logger.info("generate QReCC passage collection -> {} ok!".format(output_file))
     logger.info("#totoal passages = {}".format(pid))
@@ -90,9 +90,10 @@ def gen_qrecc_qrel(input_test_file, output_qrel_file, pid2rawpid_path):
         data = json.load(f)
 
     pid2rawpid = pload(pid2rawpid_path)
-    rawpid2pid = {}
-    for pid, rawpid in enumerate(pid2rawpid):
-        rawpid2pid[rawpid] = pid
+    rawpid2pid = {rawpid: pid for pid, rawpid in pid2rawpid.items()}
+    # rawpid2pid = {}
+    # for pid, rawpid in enumerate(pid2rawpid):
+    #     rawpid2pid[rawpid] = pid
 
     with open(output_qrel_file, "w") as f:
         for line in tqdm(data):
@@ -118,9 +119,11 @@ def gen_qrecc_train_test_files(train_inputfile,
     - pid2rawpid_path = "pid2rawpid.pkl"
     '''
     pid2rawpid = pload(pid2rawpid_path)
-    rawpid2pid = {}
-    for pid, rawpid in enumerate(pid2rawpid):
-        rawpid2pid[rawpid] = pid
+    rawpid2pid = {rawpid: pid for pid, rawpid in pid2rawpid.items()}
+    # rawpid2pid = {}
+    # for pid, rawpid in enumerate(pid2rawpid):
+    #     #When used with a dictionary, enumerate() will only iterate over the keys of the dictionary, not the key-value pairs.
+    #     rawpid2pid[rawpid] = pid
     
     sid2utt = {}
     sid2pospid = {}
@@ -460,9 +463,9 @@ def statis_info(inputfile, statis_oracle):
 
 if __name__ == "__main__":
     # original local data dir
-    # dataset_dir = "/home/wangym/data1/dataset/qrecc/"
-    # data dir in /scratchdata on the assigned computing node
-    dataset_dir = "/scratcgdata/{}/{}/".format(os.environ["SLURM_JOB_USER"], os.environ["SLURM_JOB_ID"])
+    dataset_dir = "/home/wangym/data1/dataset/qrecc/"
+    # move data dir in /scratchdata on the assigned computing node
+    #dataset_dir = "/scratcgdata/{}/{}/".format(os.environ["SLURM_JOB_USER"], os.environ["SLURM_JOB_ID"])
 
     input_passage_dir = dataset_dir + "collection-paragraph"
     output_file = dataset_dir + "new_preprocessed/qrecc_collection.tsv"
@@ -473,15 +476,15 @@ if __name__ == "__main__":
     test_inputfile = dataset_dir + "scai-qrecc21-test-turns.json"
     train_outputfile = dataset_dir + "new_preprocessed/train.json"
     test_outputfile = dataset_dir + "new_preprocessed/test.json"
-    pid2rawpid_path = dataset_dir + "pid2rawpid.pkl"
+    pid2rawpid_path = dataset_dir + "new_preprocessed/pid2rawpid.pkl"
     gen_qrecc_train_test_files(train_inputfile, test_inputfile, train_outputfile, test_outputfile, pid2rawpid_path)
 
     input_test_file = dataset_dir + "scai-qrecc21-test-turns.json"
-    pid2rawpid_path = dataset_dir + "pid2rawpid.pkl"
+    pid2rawpid_path = dataset_dir + "new_preprocessed/pid2rawpid.pkl"
     output_qrel_file = dataset_dir + "new_preprocessed/qrecc_qrel.tsv"
     gen_qrecc_qrel(input_test_file, output_qrel_file, pid2rawpid_path)
     
-    qrecc_collection_path = dataset_dir + "qrecc_collection.tsv"
+    qrecc_collection_path = dataset_dir + "new_preprocessed/qrecc_collection.tsv"
     train_inputfile = dataset_dir + "new_preprocessed/train.json"
     train_outputfile_with_doc = dataset_dir + "new_preprocessed/train_with_doc.json"
     extract_doc_content_of_random_negs_for_train_file(qrecc_collection_path, train_inputfile, train_outputfile_with_doc)

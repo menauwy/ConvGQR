@@ -1,7 +1,5 @@
-from IPython import embed
+#from IPython import embed
 import logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 import sys
 sys.path.append('..')
 sys.path.append('.')
@@ -13,11 +11,11 @@ import random
 import numpy as np
 import csv
 import argparse
-import toml
+# import toml
 import os
 
 from os import path
-from os.path import join as oj
+#from os.path import join as oj
 import json
 from tqdm import tqdm, trange
 
@@ -27,7 +25,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, RandomSampler
 from transformers import get_linear_schedule_with_warmup
 from transformers import T5Tokenizer, T5ForConditionalGeneration
-from tensorboardX import SummaryWriter
+#from torch.utils.tensorboard import SummaryWriter
 
 from models import load_model
 from utils import check_dir_exist_or_build, pstore, pload, set_seed, get_optimizer, print_res
@@ -35,13 +33,56 @@ from data_structure import T5RewriterIRDataset_qrecc, T5RewriterIRDataset_topioc
 #os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 def save_model(args, model, query_tokenizer, save_model_order, epoch, step, loss):
-    output_dir = oj(args.model_output_path, '{}-{}-best-model'.format("KD-ANCE-prefix", args.decode_type))
+    """Deprecated: use general version in below"""
+    output_dir = os.path.join(args.model_output_path, '{}-{}-best-model'.format("KD-ANCE-prefix", args.decode_type))
     check_dir_exist_or_build([output_dir])
+
     model_to_save = model.module if hasattr(model, 'module') else model
     #model_to_save.t5.save_pretrained(output_dir)
     model_to_save.save_pretrained(output_dir)
     query_tokenizer.save_pretrained(output_dir)
     logger.info("Step {}, Save checkpoint at {}".format(step, output_dir))
+
+def save_checkpoint(args, model, query_tokenizer, save_model_order, epoch, step, loss, optimizer, scheduler):
+    """
+    To continue training a checkpoint, save optimizer, eposh, step and loss
+    """
+    output_dir = os.path.join(args.model_output_path, '{}-{}-best-model'.format("KD-ANCE-prefix", args.decode_type))
+    check_dir_exist_or_build([output_dir])
+    checkpoint_file = output_dir + "/checkpoint.pt"
+
+    model_to_save = model.module if hasattr(model, 'module') else model
+    model_to_save.save_pretrained(output_dir)
+    query_tokenizer.save_pretrained(output_dir)
+    # save optimizer and scheduler states, epoch and step.
+    torch.save({
+        'epoch': epoch,
+        'step': step,
+        'loss': loss,
+        'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict(),
+    }, checkpoint_file)
+    logger.info("Eposh {}, Step {}, Save checkpoint at {}".format(epoch, step, output_dir))
+
+def load_checkpoint(args):
+    """
+    To continue training a checkpoint, load optimizer, eposh, step and loss
+    """
+    output_dir = os.path.join(args.model_output_path, '{}-{}-best-model'.format("KD-ANCE-prefix", args.decode_type))
+    checkpoint_file = output_dir + "/checkpoint.pt"
+    # load model and tokenizer
+    tokenizer = T5Tokenizer.from_pretrained(output_dir)
+    model = T5ForConditionalGeneration.from_pretrained(output_dir).to(args.device)
+
+    # load optimizer and scheduler states, epoch and step.
+    checkpoint = torch.load(checkpoint_file)
+    epoch = checkpoint['epoch']
+    step = checkpoint['step']
+    loss = checkpoint['loss']
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+    logger.info("Eposh {}, Step {}, Load checkpoint from {}".format(epoch, step, output_dir))
+    return model, tokenizer, epoch, step, loss, optimizer, scheduler
 
 def cal_ranking_loss(query_embs, pos_doc_embs, neg_doc_embs):
     batch_size = len(query_embs)
@@ -58,21 +99,25 @@ def cal_kd_loss(query_embs, kd_embs):
     return loss_func(query_embs, kd_embs)
 
 
-def train(args, log_writer):
+def train(args, logger):
     passage_tokenizer, passage_encoder = load_model("ANCE_Passage", args.pretrained_passage_encoder)
     passage_encoder = passage_encoder.to(args.device)
    
     query_tokenizer = T5Tokenizer.from_pretrained(args.pretrained_query_encoder)
     query_encoder = T5ForConditionalGeneration.from_pretrained(args.pretrained_query_encoder).to(args.device)
-
     
+    # gpu setting
     if args.n_gpu > 1:
         query_encoder = torch.nn.DataParallel(query_encoder, device_ids = list(range(args.n_gpu)))
 
     args.batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     
     # data prepare
-    train_dataset = T5RewriterIRDataset_topiocqa(args, query_tokenizer, args.train_file_path)
+    if args.train_dataset == "qrecc":
+        train_dataset = T5RewriterIRDataset_qrecc(args, query_tokenizer, args.train_file_path)
+    elif args.train_dataset == "topiocqa":
+        train_dataset = T5RewriterIRDataset_topiocqa(args, query_tokenizer, args.train_file_path)
+    
     train_loader = DataLoader(train_dataset, 
                                 #sampler=train_sampler,
                                 batch_size = args.batch_size, 
@@ -81,7 +126,8 @@ def train(args, log_writer):
 
     logger.info("train samples num = {}".format(len(train_dataset)))
     
-    total_training_steps = args.num_train_epochs * (len(train_dataset) // args.batch_size + int(bool(len(train_dataset) % args.batch_size)))
+    num_steps_per_epoch = (len(train_dataset) // args.batch_size + int(bool(len(train_dataset) % args.batch_size)))
+    total_training_steps = args.num_train_epochs * num_steps_per_epoch
     num_warmup_steps = args.num_warmup_portion * total_training_steps
     
     optimizer = get_optimizer(args, query_encoder, weight_decay=args.weight_decay)
@@ -94,17 +140,17 @@ def train(args, log_writer):
     logger.info("Start training...")
     logger.info("Total training epochs = {}".format(args.num_train_epochs))
     logger.info("Total training steps = {}".format(total_training_steps))
-    
-    num_steps_per_epoch = total_training_steps // args.num_train_epochs
     logger.info("Num steps per epoch = {}".format(num_steps_per_epoch))
 
     if isinstance(args.print_steps, float):
         args.print_steps = int(args.print_steps * num_steps_per_epoch)
         args.print_steps = max(1, args.print_steps)
 
+    # iterable object with tqdm progress bar
     epoch_iterator = trange(args.num_train_epochs, desc="Epoch", disable=args.disable_tqdm)
 
-    best_loss = 1000
+    # best_loss = 1000 #deprecated
+    best_loss = float('inf')
     for epoch in epoch_iterator:
         query_encoder.train()
         passage_encoder.eval()
@@ -119,10 +165,12 @@ def train(args, log_writer):
             bt_neg_docs_mask = batch['bt_neg_docs_mask'].to(args.device)
             bt_oracle_query = batch['bt_labels'].to(args.device)
             
+            # https://huggingface.co/docs/transformers/main/en/model_doc/t5
             output = query_encoder(input_ids=bt_conv_query, 
                          attention_mask=bt_conv_query_mask, 
                          labels=bt_oracle_query)
             decode_loss = output.loss  # B * dim
+            # query embeddings, why just first dimension?
             conv_query_embs = output.encoder_last_hidden_state[:, 0]
 
             with torch.no_grad():
@@ -131,7 +179,8 @@ def train(args, log_writer):
                 #neg_doc_embs = passage_encoder(bt_neg_docs, bt_neg_docs_mask).detach()  # B * dim, hard negative
 
             #ranking_loss = cal_ranking_loss(conv_query_embs, pos_doc_embs, neg_doc_embs)
-            ranking_loss = cal_kd_loss(conv_query_embs, pos_doc_embs)
+            # In the paper, they use MSE loss of query and relevant doc embeddings as the retreival signal, inserted in training loss.
+            ranking_loss = cal_kd_loss(conv_query_embs, pos_doc_embs) #MSE
             loss = decode_loss + args.alpha * ranking_loss
             loss.backward()
             torch.nn.utils.clip_grad_norm_(query_encoder.parameters(), args.max_grad_norm)
@@ -152,7 +201,8 @@ def train(args, log_writer):
             global_step += 1    # avoid saving the model of the first step.
             # save model finally
             if best_loss > loss:
-                save_model(args, query_encoder, query_tokenizer, save_model_order, epoch, global_step, loss.item())
+                #save_model(args, query_encoder, query_tokenizer, save_model_order, epoch, global_step, loss.item())
+                save_checkpoint(args, query_encoder, query_tokenizer, save_model_order, epoch, global_step, loss.item(), optimizer, scheduler)
                 best_loss = loss
                 logger.info("Epoch = {}, Global Step = {}, ranking loss = {}, decode loss = {}, total loss = {}".format(
                                 epoch + 1,
@@ -167,15 +217,17 @@ def train(args, log_writer):
 
 def get_args():
     parser = argparse.ArgumentParser()
+    dataset_dir = '/home/wangym/data1/dataset/'
+    model_dir = '/home/wangym/data1/model/'
+    parser.add_argument("--pretrained_query_encoder", type=str, default= model_dir + "pretrained/t5-base") # default="checkpoints/T5-base"
+    parser.add_argument("--pretrained_passage_encoder", type=str, default= model_dir + "pretrained/ance-msmarco-passage") # default="checkpoints/ad-hoc-ance-msmarco"
 
-    parser.add_argument("--pretrained_query_encoder", type=str, default="checkpoints/T5-base")
-    parser.add_argument("--pretrained_passage_encoder", type=str, default="checkpoints/ad-hoc-ance-msmarco")
-
-    parser.add_argument("--train_file_path", type=str, default="datasets/qrecc/new_preprocessed/train_with_doc.json")
-    parser.add_argument("--log_dir_path", type=str, default="output/train_topiocqa/Log")
-    parser.add_argument('--model_output_path', type=str, default="output/train_topiocqa/Checkpoint")
+    parser.add_argument("--train_dataset", type=str, default="qrecc") #qrecc for rewriter&expansion, plus topiocqa for expansion; the same as decode_type
+    parser.add_argument("--train_file_path", type=str, default=dataset_dir + "qrecc/new_preprocessed/train_with_doc.json")
+    parser.add_argument("--log_dir_path", type=str, default=model_dir+ "convgqr/train_qrecc")
+    parser.add_argument('--model_output_path', type=str, default=model_dir+"convgqr/train_qrecc")
     parser.add_argument("--collate_fn_type", type=str, default="flat_concat_for_train")
-    parser.add_argument("--decode_type", type=str, default="oracle")
+    parser.add_argument("--decode_type", type=str, default="oracle") # "oracle" for rewrite and "answer" for expansion
     parser.add_argument("--use_prefix", type=bool, default=True)
 
     parser.add_argument("--per_gpu_train_batch_size", type=int,  default=8)
@@ -188,7 +240,7 @@ def get_args():
     parser.add_argument("--max_concat_length", type=int, default=512, help="Max concatenation length of the session")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--n_gpu", type=int, default=1)
-    parser.add_argument("--alpha", type=int, default=0.5)
+    parser.add_argument("--alpha", type=float, default=0.5)
     parser.add_argument("--disable_tqdm", type=bool, default=True)
 
     parser.add_argument("--print_steps", type=float, default=0.5)
@@ -210,7 +262,8 @@ def get_args():
 if __name__ == '__main__':
     args = get_args()
     set_seed(args)
-    log_writer = SummaryWriter(log_dir = args.log_dir_path)
-    train(args, log_writer)
-    log_writer.close()
-
+    #log_writer = SummaryWriter(log_dir = args.log_dir_path)
+    logging.basicConfig(filename=args.log_dir_path,level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__) #create a logger with the name of the current module
+    train(args, logger)
+    # log_writer.close()

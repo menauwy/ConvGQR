@@ -24,6 +24,10 @@ class ANCE(RobertaForSequenceClassification):
     #         self.pooler_output = pooler_output
 
     def __init__(self, config):
+        """The _init_weights function is used to initialize 
+        the weights of the model, but it's only called when 
+        a new instance of the ANCE class is created, 
+        not when a pre-trained model is loaded. """
         RobertaForSequenceClassification.__init__(self, config)
         self.embeddingHead = nn.Linear(config.hidden_size, 768) # ANCE has
         self.norm = nn.LayerNorm(768)
@@ -70,15 +74,21 @@ class ANCE(RobertaForSequenceClassification):
         return self.query_emb(input_ids, attention_mask)
       
 def load_model(model_type, model_path):
+    """model_path: path to the model checkpoint directory
+    model_path called in .from_pretrained() can be a dir or a direct file path.
+    Both are fine. Here should be a dir"""
     if model_type == "ANCE_Query" or model_type == "ANCE_Passage":
         config = RobertaConfig.from_pretrained(
             model_path,
-            finetuning_task="MSMarco",
+            finetuning_task="MSMarco", # for informational purposes only
+            # The finetuning_task argument can be useful for logging or for loading task-specific configurations, but in most cases, you can ignore it.
         )
         tokenizer = RobertaTokenizer.from_pretrained(
             model_path,
             do_lower_case=True
         )
+        """ The weights from the pre-trained model overwrite 
+        any weights that were previously initialized."""
         model = ANCE.from_pretrained(model_path, config=config)
     else:
         raise ValueError

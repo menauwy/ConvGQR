@@ -3,7 +3,11 @@ import logging
 import sys
 sys.path.append('..')
 sys.path.append('.')
-
+import os
+from os import path
+print(os.environ.get('CONDA_DEFAULT_ENV'))
+print(os.environ.get('PYTHONPATH'))
+print(sys.executable)
 import time
 import copy
 import pickle
@@ -12,9 +16,7 @@ import numpy as np
 import csv
 import argparse
 # import toml
-import os
 
-from os import path
 #from os.path import join as oj
 import json
 from tqdm import tqdm, trange
@@ -47,7 +49,9 @@ def save_checkpoint(args, model, query_tokenizer, save_model_order, epoch, step,
     """
     To continue training a checkpoint, save optimizer, eposh, step and loss
     """
-    output_dir = os.path.join(args.model_output_path, '{}-{}-best-model'.format("KD-ANCE-prefix", args.decode_type))
+    # output_dir = os.path.join(args.model_output_path, '{}-{}-best-model'.format("KD-ANCE-prefix", args.decode_type))
+    output_dir = os.path.join(args.model_output_path, '{}-{}-best-model-checkpoint'.format("KD-ANCE-prefix", args.decode_type))
+
     check_dir_exist_or_build([output_dir])
     checkpoint_file = output_dir + "/checkpoint.pt"
 
@@ -62,11 +66,11 @@ def save_checkpoint(args, model, query_tokenizer, save_model_order, epoch, step,
         'optimizer_state_dict': optimizer.state_dict(),
         'scheduler_state_dict': scheduler.state_dict(),
     }, checkpoint_file)
-    logger.info("Eposh {}, Step {}, Save checkpoint at {}".format(epoch, step, output_dir))
+    #logger.info("Epoch {}, Step {}, Save checkpoint at {}".format(epoch, step, output_dir))
 
-def load_checkpoint(args):
+def load_checkpoint(args, optimizer, scheduler, logger):
     """
-    To continue training a checkpoint, load optimizer, eposh, step and loss
+    To continue training a checkpoint, load optimizer, epoch, step and loss
     """
     output_dir = os.path.join(args.model_output_path, '{}-{}-best-model'.format("KD-ANCE-prefix", args.decode_type))
     checkpoint_file = output_dir + "/checkpoint.pt"
@@ -81,7 +85,7 @@ def load_checkpoint(args):
     loss = checkpoint['loss']
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-    logger.info("Eposh {}, Step {}, Load checkpoint from {}".format(epoch, step, output_dir))
+    #logger.info("Eposh {}, Step {}, Load checkpoint from {}".format(epoch, step, output_dir))
     return model, tokenizer, epoch, step, loss, optimizer, scheduler
 
 def cal_ranking_loss(query_embs, pos_doc_embs, neg_doc_embs):
@@ -124,7 +128,7 @@ def train(args, logger):
                                 shuffle=True, 
                                 collate_fn=train_dataset.get_collate_fn(args))
 
-    logger.info("train samples num = {}".format(len(train_dataset)))
+    logger.info("train dataset samples num = {}".format(len(train_dataset)))
     
     num_steps_per_epoch = (len(train_dataset) // args.batch_size + int(bool(len(train_dataset) % args.batch_size)))
     total_training_steps = args.num_train_epochs * num_steps_per_epoch
@@ -133,9 +137,17 @@ def train(args, logger):
     optimizer = get_optimizer(args, query_encoder, weight_decay=args.weight_decay)
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=total_training_steps)
 
+    #local_step = 0 #only useful for training from checkpoint
     global_step = 0
     save_model_order = 0
 
+
+    # check if train from checkpoint:
+    if args.train_from_checkpoint:
+        logger.info("Loading checkpoint...")
+        query_encoder, query_tokenizer, start_epoch, last_step, loss, optimizer, scheduler = load_checkpoint(args, optimizer, scheduler, logger)
+        logger.info("Load checkpoint, epoch = {}, local_step = {}, loss = {}".format(start_epoch, last_step, loss))
+        start_step = last_step + 1
     # begin to train
     logger.info("Start training...")
     logger.info("Total training epochs = {}".format(args.num_train_epochs))
@@ -146,15 +158,28 @@ def train(args, logger):
         args.print_steps = int(args.print_steps * num_steps_per_epoch)
         args.print_steps = max(1, args.print_steps)
 
-    # iterable object with tqdm progress bar
-    epoch_iterator = trange(args.num_train_epochs, desc="Epoch", disable=args.disable_tqdm)
+    if not args.train_from_checkpoint: #train from scratch
+        # iterable object with tqdm progress bar
+        epoch_iterator = trange(args.num_train_epochs, desc="Epoch", disable=args.disable_tqdm)
+        #best_loss = float('inf') #else loaded from checkpoint
+        #batch_iterator = enumerate(tqdm(train_loader,  desc="Step", disable=args.disable_tqdm))
+    else:
+        # iterable object start from checkpoint epoch
+        epoch_iterator = trange(start_epoch, args.num_train_epochs, desc="Epoch", disable=args.disable_tqdm)
+        # Problem is: the loss can be higher again in a new epoch.
+        #best_loss = float('inf') #loss
+        #batch_iterator = enumerate(tqdm(train_loader,  desc="Step", disable=args.disable_tqdm), start=start_step)
 
-    # best_loss = 1000 #deprecated
-    best_loss = float('inf')
     for epoch in epoch_iterator:
         query_encoder.train()
         passage_encoder.eval()
-        for batch in tqdm(train_loader,  desc="Step", disable=args.disable_tqdm):
+        best_loss = float('inf')
+        for step, batch in enumerate(tqdm(train_loader,  desc="Step", disable=args.disable_tqdm)):
+            # if the current setp is less than the desired resume_step, skip it to the next batch
+            # if args.train_from_checkpoint and step < start_step:
+            #     #logger.info("Step = {}, Batch ids = {}".format(step, batch['bt_sample_ids']))
+            #     continue
+
             query_encoder.zero_grad()
 
             bt_conv_query = batch['bt_input_ids'].to(args.device) # B * len
@@ -164,6 +189,8 @@ def train(args, logger):
             bt_neg_docs = batch['bt_neg_docs'].to(args.device) # B * len batch size negs
             bt_neg_docs_mask = batch['bt_neg_docs_mask'].to(args.device)
             bt_oracle_query = batch['bt_labels'].to(args.device)
+
+            #logger.info("Batch ids = {}".format(batch['bt_sample_ids']))
             
             # https://huggingface.co/docs/transformers/main/en/model_doc/t5
             output = query_encoder(input_ids=bt_conv_query, 
@@ -188,29 +215,34 @@ def train(args, logger):
             scheduler.step()
 
             if args.print_steps > 0 and global_step % args.print_steps == 0:
-                logger.info("Epoch = {}, Global Step = {}, ranking loss = {}, decode loss = {}, total loss = {}".format(
-                                epoch + 1,
-                                global_step,
+                logger.info("Epoch = {}, local Step = {}, ranking loss = {}, decode loss = {}, total loss = {}".format(
+                                epoch, # original to be epoch + 1
+                                step,
                                 ranking_loss.item(),
                                 decode_loss.item(),
                                 loss.item()))
 
             #log_writer.add_scalar("train_ranking_loss, decode_loss, total_loss", ranking_loss, decode_loss, loss, global_step)
             
-
-            global_step += 1    # avoid saving the model of the first step.
+            # previously here to be global_step += 1
+            #local_step = 0 # reset local step for next epoch
             # save model finally
             if best_loss > loss:
                 #save_model(args, query_encoder, query_tokenizer, save_model_order, epoch, global_step, loss.item())
-                save_checkpoint(args, query_encoder, query_tokenizer, save_model_order, epoch, global_step, loss.item(), optimizer, scheduler)
+                #logger.info("Get better loss at local step {}".format(step))
+                save_checkpoint(args, query_encoder, query_tokenizer, save_model_order, epoch, step, loss.item(), optimizer, scheduler)
                 best_loss = loss
-                logger.info("Epoch = {}, Global Step = {}, ranking loss = {}, decode loss = {}, total loss = {}".format(
-                                epoch + 1,
-                                global_step,
+                logger.info("Saved checkpoint: Epoch = {}, Local Step = {}, ranking loss = {}, decode loss = {}, total loss = {}".format(
+                                epoch,
+                                step,
                                 ranking_loss.item(),
                                 decode_loss.item(),
                                 loss.item()))
-                
+            if not args.train_from_checkpoint: #from scratch
+                global_step += 1 # avoid saving the model of the first step.
+            else:
+                global_step = step + epoch * num_steps_per_epoch
+
     logger.info("Training finish!")          
          
 
@@ -219,6 +251,8 @@ def get_args():
     parser = argparse.ArgumentParser()
     dataset_dir = '/home/wangym/data1/dataset/'
     model_dir = '/home/wangym/data1/model/'
+
+    parser.add_argument("--train_from_checkpoint", action='store_true') #if specified in command line, then true. Defalut false
     parser.add_argument("--pretrained_query_encoder", type=str, default= model_dir + "pretrained/t5-base") # default="checkpoints/T5-base"
     parser.add_argument("--pretrained_passage_encoder", type=str, default= model_dir + "pretrained/ance-msmarco-passage") # default="checkpoints/ad-hoc-ance-msmarco"
 

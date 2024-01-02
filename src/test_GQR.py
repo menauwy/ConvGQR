@@ -7,12 +7,12 @@ sys.path.append('.')
 
 import json
 import argparse
-import toml
+# import toml
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
-from IPython import embed
+# from IPython import embed
 import torch
 import math
 from torch.utils.data import DataLoader
@@ -35,7 +35,11 @@ def inference_t5qr(args):
     if args.n_gpu > 1:
         query_encoder = torch.nn.DataParallel(query_encoder, device_ids = list(range(args.n_gpu)))
 
-    test_dataset = T5RewriterDataset_topiocqa(args, tokenizer, args.test_file_path)
+    if args.decode_type == "oracle":
+        test_dataset = T5RewriterDataset_qrecc(args, tokenizer, args.test_file_path)
+    elif args.decode_type == "answer":
+        test_dataset = T5RewriterDataset_topiocqa(args, tokenizer, args.test_file_path)   
+
     args.batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
     #ddp_sampler = DistributedSampler(test_dataset)
     test_dataloader = DataLoader(test_dataset, 
@@ -56,14 +60,12 @@ def inference_t5qr(args):
                                                         do_sample=False,
                                                         max_length=args.max_query_length,
                                                         )
-                    )
                 else:
                     output_seqs = model.generate(input_ids=bt_input_ids, 
                                                         attention_mask=bt_attention_mask, 
                                                         do_sample=False,
                                                         max_length=args.max_query_length,
                                                         )
-                    )
 
                 outputs = tokenizer.batch_decode(output_seqs, skip_special_tokens=True)
 
@@ -87,7 +89,7 @@ def inference_t5qr(args):
 def get_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--model_checkpoint_path", type=str, default="output/train_qrecc/Checkpoint/KD-ANCE-prefix-oracle-0.5-best-model")
+    parser.add_argument("--model_checkpoint_path", type=str, default="/home/wangym/data1/model/convgqr/train_qrecc/KD-ANCE-prefix-oracle-best-model")
     parser.add_argument("--test_file_path", type=str, default="datasets/qrecc/new_preprocessed/test.json")
     parser.add_argument('--output_file_path', type=str, default="output/qrecc/QR/test_QRIR_oracle_prefix.json")
     parser.add_argument("--collate_fn_type", type=str, default="flat_concat_for_test")

@@ -87,3 +87,4 @@ Special tokens have been added in the vocabulary, make sure the associated word 
 2023-12-07 18:57:11,079 - __main__ - INFO - Epoch = 1, Global Step = 761, ranking loss = 0.9447453618049622, decode loss = 0.14854183793067932, total loss = 0.6209145188331604
 2023-12-07 20:29:13,304 - __main__ - INFO - Step 1262, Save checkpoint at /home/wangym/data1/model/convgqr/train_qrecc/KD-ANCE-prefix-oracle-best-model
 2023-12-07 20:29:13,311 - __main__ - INFO - Epoch = 1, Global Step = 1262, ranking loss = 0.9366188049316406, decode loss = 0.05351307615637779, total loss = 0.521822452545166
+slurmstepd: error: *** JOB 2133603 ON node865 CANCELLED AT 2023-12-07T22:24:24 ***

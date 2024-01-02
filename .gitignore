@@ -4,4 +4,4 @@ data/*.out
 # Ignore all .slurm files
 *.slurm
 data/*.slurm
-
+test.ipynb

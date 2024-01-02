@@ -9,7 +9,7 @@ import pandas as pd
 
 import argparse
 import torch
-import toml
+#import toml
 from utils import check_dir_exist_or_build, pstore, pload, split_and_padding_neighbor, set_seed, load_collection
 from torch.utils.data import DataLoader, Dataset, TensorDataset, IterableDataset
 import json
@@ -134,6 +134,11 @@ class ConvDataset_rewrite(Dataset):
         return collate_fn
 
 class T5RewriterIRDataset_qrecc(Dataset):
+    """
+    Add prefix for T5 input depends on args: 'question': xxx, 'context': xxx
+    Determine input_ids and attention_mask and label encoding by max_length, padding. 
+
+    """
     def __init__(self, args, tokenizer, filename):
         self.examples = []
         
@@ -161,13 +166,14 @@ class T5RewriterIRDataset_qrecc(Dataset):
                 random_neg_docs_text = record["random_neg_docs_text"]
             else:
                 continue
-            
+            # prefix for T5 input
             if args.use_prefix:
                 cur_utt_text = "question: " + cur_utt_text
                 first_context = True
-                
+            # encode current query    
             cur_utt = tokenizer.encode(cur_utt_text, add_special_tokens = True, max_length = args.max_query_length)
             flat_concat.extend(cur_utt)
+            # encode context(history query and history answer) in reverse order
             for j in range(len(ctx_utts_text) - 1, -1, -1):
                 if j % 2 == 1:
                     max_length = args.max_response_length
@@ -182,10 +188,12 @@ class T5RewriterIRDataset_qrecc(Dataset):
                     break
                 else:
                     flat_concat.extend(utt) 
-
+            # padded input_ids and attention_mask to same length
             flat_concat, flat_concat_mask = padding_seq_to_same_length(flat_concat, max_pad_length = args.max_concat_length)
 
+            # label encoding for training
             if args.collate_fn_type == "flat_concat_for_train":
+                # qrecc is used to train both rewriter and expansion models
                 if args.decode_type == "oracle":
                     target_seq = oracle_utt_text
                     target_encoding = tokenizer(target_seq, padding="max_length", max_length=args.max_query_length, truncation=True)    
@@ -207,7 +215,7 @@ class T5RewriterIRDataset_qrecc(Dataset):
 
                 labels = target_encoding.input_ids
                 labels = torch.tensor(labels)
-                labels[labels == tokenizer.pad_token_id] = -100
+                labels[labels == tokenizer.pad_token_id] = -100 # also stated on hf doc: we must make sure that padding token id’s of the labels are not taken into account by the loss function. In PyTorch and Tensorflow, this can be done by replacing them with -100, which is the ignore_index of the CrossEntropyLoss.
                 labels = labels.tolist()
                 
                 for idx in range(len(pos_docs_text)):
@@ -217,7 +225,8 @@ class T5RewriterIRDataset_qrecc(Dataset):
                     neg_docs.extend(tokenizer.encode(random_neg_docs_text[0], add_special_tokens=True, max_length = args.max_doc_length))
                     pos_docs, pos_docs_mask = padding_seq_to_same_length(pos_docs, max_pad_length = args.max_doc_length)
                     neg_docs, neg_docs_mask = padding_seq_to_same_length(neg_docs, max_pad_length = args.max_doc_length)
-                
+
+                    # each pos doc will be stored as an seperate example
                     self.examples.append([record['sample_id'], 
                                     flat_concat,
                                     flat_concat_mask,
@@ -229,6 +238,7 @@ class T5RewriterIRDataset_qrecc(Dataset):
                                     neg_docs,
                                     neg_docs_mask])
                 i += 1
+            # for reference
             else:
                 labels = []
                 pos_docs = []
@@ -481,6 +491,11 @@ class T5RewriterDataset_qrecc(Dataset):
         return collate_fn
 
 class T5RewriterIRDataset_topiocqa(Dataset):
+    """
+    Add prefix for T5 input depends on args: 'question': xxx, 'context': xxx
+    Determine input_ids and attention_mask and label encoding by max_length, padding. 
+
+    """
     def __init__(self, args, tokenizer, filename):
         self.examples = []
         
@@ -515,12 +530,14 @@ class T5RewriterIRDataset_topiocqa(Dataset):
             #else:
             #    continue
             
+            # prefix for T5 input
             if args.use_prefix:
                 cur_utt_text = "question: " + cur_utt_text
                 first_context = True
-                
+            # encode current query    
             cur_utt = tokenizer.encode(cur_utt_text, add_special_tokens = True, max_length = args.max_query_length)
             flat_concat.extend(cur_utt)
+            # encode context(history query and history answer) in reverse order
             for j in range(len(ctx_utts_text) - 1, -1, -1):
                 if j % 2 == 1:
                     max_length = args.max_response_length
@@ -535,9 +552,10 @@ class T5RewriterIRDataset_topiocqa(Dataset):
                     break
                 else:
                     flat_concat.extend(utt) 
-
+            # padded input_ids and attention_mask to same length
             flat_concat, flat_concat_mask = padding_seq_to_same_length(flat_concat, max_pad_length = args.max_concat_length)
 
+            # label encoding for training
             if args.collate_fn_type == "flat_concat_for_train":
                 if args.decode_type == "oracle":
                     target_seq = oracle_utt_text
@@ -557,7 +575,8 @@ class T5RewriterIRDataset_topiocqa(Dataset):
                 neg_docs.extend(tokenizer.encode(record["neg_docs"], add_special_tokens=True, max_length = args.max_doc_length))
                 pos_docs, pos_docs_mask = padding_seq_to_same_length(pos_docs, max_pad_length = args.max_doc_length)
                 neg_docs, neg_docs_mask = padding_seq_to_same_length(neg_docs, max_pad_length = args.max_doc_length)
-            
+
+                # each pos doc will be stored as an seperate example
                 self.examples.append([record['id'], 
                                 flat_concat,
                                 flat_concat_mask,
@@ -569,6 +588,7 @@ class T5RewriterIRDataset_topiocqa(Dataset):
                                 neg_docs,
                                 neg_docs_mask])
                 i += 1
+            # for reference
             else:
                 labels = []
                 pos_docs = []
@@ -858,9 +878,11 @@ def padding_seq_to_same_length(input_ids, max_pad_length, pad_token = 0):
     padding_ids = [pad_token] * padding_length
     attention_mask = []
 
+    # if padding_length <= 0, then truncate the input_ids
     if padding_length <= 0:
         attention_mask = [1] * max_pad_length
         input_ids = input_ids[:max_pad_length]
+    # else pad the input_ids
     else:
         attention_mask = [1] * len(input_ids) + [0] * padding_length
         input_ids = input_ids + padding_ids

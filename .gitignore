@@ -5,3 +5,4 @@ data/*.out
 *.slurm
 data/*.slurm
 test.ipynb
+*.out

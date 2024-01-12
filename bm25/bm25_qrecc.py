@@ -1,5 +1,12 @@
+"""
+sparse retreival with bm25 using pyserini.
+Input: query rewrite + query expansion
+Output: trec file
+Evaluation: pytrec_eval
+! print_res: the way they deal with map and mrr scores from ndcg scores is referetable!
+"""
 from re import T
-from IPython import embed
+# from IPython import embed
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -23,9 +30,11 @@ def main():
     
     query_list = []
     qid_list = []
+    # read rewrites
     with open(args.input_query_path, "r") as f:
         data = f.readlines()
 
+    # read expansions
     with open(args.input_query_path_2, "r") as f2:
         data_2 = f2.readlines()
 
@@ -39,14 +48,14 @@ def main():
             query = data[i]['output']
         elif args.query_type == "oracle":
             query = data[i]['oracle_query']
-        elif args.query_type == "decode":
+        elif args.query_type == "decode": #decode
             query = data[i]['oracle_utt_text']
             if args.eval_type == "answer":
                 data_2[i] = json.loads(data_2[i])
                 query = data_2[i]['answer_utt_text']
-            elif args.eval_type == "oracle+answer":
+            elif args.eval_type == "oracle+answer":#oracle+answer
                 data_2[i] = json.loads(data_2[i])
-                query = query + ' ' + data_2[i]['answer_utt_text']
+                query = query + ' ' + data_2[i]['answer_utt_text']#concatenation of rewrites and expansion
             
         query_list.append(query)
         qid_list.append(data[i]['sample_id'])
@@ -56,7 +65,7 @@ def main():
     searcher.set_bm25(args.bm25_k1, args.bm25_b)
     hits = searcher.batch_search(query_list, qid_list, k = args.top_k, threads = 40)
 
-    
+    # write search results to trec files
     with open(oj(args.output_dir_path, "bm25_QRIR_oracle+answer_res.trec"), "w") as f:
         for qid in qid_list:
             for i, item in enumerate(hits[qid]):
@@ -64,7 +73,7 @@ def main():
                                                 "Q0",
                                                 item.docid[3:],
                                                 i+1,
-                                                -i - 1 + 200,
+                                                -i - 1 + 200, ## new score?
                                                 item.score,
                                                 "bm25"
                                                 ))
@@ -76,6 +85,10 @@ def main():
 
 
 def print_res(run_file, qrel_file, rel_threshold):
+    """
+    evaluate the run file using pytrec_eval
+    """
+    # read run file and gold qrel file
     with open(run_file, 'r' )as f:
         run_data = f.readlines()
     with open(qrel_file, 'r') as f:
@@ -85,7 +98,8 @@ def print_res(run_file, qrel_file, rel_threshold):
     qrels_ndcg = {}
     runs = {}
     
-    for line in qrel_data:
+    for line in qrel_data:        
+        # format: query, q0, passage, rel
         line = line.strip().split()
         query = line[0]
         passage = line[2]
@@ -94,7 +108,6 @@ def print_res(run_file, qrel_file, rel_threshold):
             qrels[query] = {}
         if query not in qrels_ndcg:
             qrels_ndcg[query] = {}
-
         # for NDCG
         qrels_ndcg[query][passage] = rel
         # for MAP, MRR, Recall
@@ -105,6 +118,7 @@ def print_res(run_file, qrel_file, rel_threshold):
         qrels[query][passage] = rel
     
     for line in run_data:
+        # format: qid, q0, docid, index, new score, score, 'bm25'
         line = line.split(" ")
         query = line[0]
         passage = line[2]
@@ -146,11 +160,11 @@ def print_res(run_file, qrel_file, rel_threshold):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_query_path", type=str, default="output/qrecc/QR/test_QRIR_oracle_prefix.json")
-    parser.add_argument("--input_query_path_2", type=str, default="output/qrecc/QR/test_QRIR_answer_prefix.json")
-    parser.add_argument("--index_dir_path", type=str, default="datasets/qrecc/indexes/bm25")
-    parser.add_argument("--output_dir_path", type=str, default="output/qrecc/bm25")
-    parser.add_argument("--gold_qrel_file_path", type=str, default="datasets/qrecc/new_preprocessed/qrecc_qrel.tsv")
+    parser.add_argument("--input_query_path", type=str, default="output/qrecc/QR/test_QRIR_oracle_prefix.json")#"output/qrecc/QR/test_QRIR_oracle_prefix.json"
+    parser.add_argument("--input_query_path_2", type=str, default="output/qrecc/QR/test_QRIR_answer_prefix.json")#"output/qrecc/QR/test_QRIR_answer_prefix.json"
+    parser.add_argument("--index_dir_path", type=str, default="/home/wangym/data1/dataset/qrecc/indexes/bm25")#"datasets/qrecc/indexes/bm25"
+    parser.add_argument("--output_dir_path", type=str, default="/home/wangym/data1/output/convgqr/qrecc/bm25")
+    parser.add_argument("--gold_qrel_file_path", type=str, default="/home/wangym/data1/dataset/qrecc/new_preprocessed/qrecc_qrel.tsv")#"datasets/qrecc/new_preprocessed/qrecc_qrel.tsv"
     
     parser.add_argument("--query_type", type=str, default="decode")
     parser.add_argument("--eval_type", type=str, default="oracle+answer")

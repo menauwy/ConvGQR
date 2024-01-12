@@ -1,10 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=train_qrecc
 #SBATCH --mail-type="ALL"
-#SBATCH --time=04:00:00
-#SBATCH --partition=amd-gpu-short
+#SBATCH --time=7-00:00:00
+#SBATCH --partition=amd-gpu-long
 #SBATCH --output=%x_%j.out
 #SBATCH --ntasks=1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=100G
 #SBATCH --gres=gpu:4g.40gb:1
 
 # making sure we load necessary module and activate right environment

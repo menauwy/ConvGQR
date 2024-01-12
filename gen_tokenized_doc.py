@@ -1,8 +1,14 @@
+"""
+This code file is written by someone else.
+open raw collection file and tokenize it, and save it to a new file.
+pid2offeset and offset2pid are saved to pickle file.
+"""
 import sys
 import os
 import torch
 sys.path += ['../']
 import pickle
+import gzip
 # from model.models import MSMarcoConfigDict, ALL_MODELS
 from torch.utils.data import TensorDataset
 import numpy as np
@@ -10,9 +16,9 @@ import argparse
 import json
 torch.multiprocessing.set_sharing_strategy('file_system')
 from multiprocessing import Process
-from models import load_model
+from src.models import load_model
 import toml
-from IPython import embed
+# from IPython import embed
 from utils import check_dir_exist_or_build
 
 def pad_input_ids(input_ids, max_length, pad_on_left=False, pad_token=0):
@@ -87,6 +93,7 @@ class EmbeddingCache:
 
 
 def numbered_byte_file_generator(base_path, file_no, record_size):
+    # file_no: number of muliple processing files : 32
     for i in range(file_no):
         with open('{}_split{}'.format(base_path, i), 'rb') as f:
             while True:
@@ -97,12 +104,14 @@ def numbered_byte_file_generator(base_path, file_no, record_size):
                 yield b
 
 def tokenize_to_file(args, i, num_process, in_path, out_path, line_fn):
-
+    """
+    Read input file line by line and split them in to multiple files, and apply line_fn to them and store
+    """
     tokenizer, _ = load_model(args.model_type + "_Passage", args.pretrained_passage_encoder)
 
     with open(in_path, 'r', encoding='utf-8') if in_path[-2:] != "gz" else gzip.open(in_path, 'rt', encoding='utf8') as in_f,\
             open('{}_split{}'.format(out_path, i), 'wb') as out_f:
-        first_line = False # tsv with first line
+        first_line = False if args.dataset == 'qrecc' else True # tsv with first line
         for idx, line in enumerate(in_f):
             if idx % num_process != i or first_line:
                 first_line = False
@@ -134,9 +143,13 @@ def multi_file_process(args, num_process, in_path, out_path, line_fn):
 
 
 def preprocess(args):
-
+    """
+    From raw collection to tokenized collection
+    """
     pid2offset = {}
     offset2pid = []
+
+    # paths
     in_passage_path = args.raw_collection_path
 
     out_passage_path = os.path.join(
@@ -150,7 +163,7 @@ def preprocess(args):
 
     out_line_count = 0
 
-    print('start passage file split processing')
+    print('start passage file split and tokenizing processing')
     multi_file_process(
         args,
         32,
@@ -177,6 +190,7 @@ def preprocess(args):
         'embedding_size': args.max_seq_length}
     with open(out_passage_path + "_meta", 'w') as f:
         json.dump(meta, f)
+
     embedding_cache = EmbeddingCache(out_passage_path)
     print("First line")
     with embedding_cache as emb:
@@ -198,6 +212,10 @@ def preprocess(args):
 
 
 def PassagePreprocessingFn(args, line, tokenizer, title = False):
+    """
+    For each line in the raw collection, tokenize 
+    and pad it and return the tokenized passage in bytes
+    """
     line = line.strip()
     ext = args.raw_collection_path[args.raw_collection_path.rfind("."):]
     passage = None
@@ -220,9 +238,9 @@ def PassagePreprocessingFn(args, line, tokenizer, title = False):
         try:
             line_arr = line.split('\t')
             p_id = int(line_arr[0])
-            if title == True:
+            if title == True: # topiocqa
                 p_text = line_arr[2].rstrip().replace(' [SEP] ', ' ') + ' ' + line_arr[1].rstrip()
-            else:
+            else: # qrecc
                 p_text = line_arr[1].rstrip()
         except IndexError:  # split error
             raise ValueError  # empty passage

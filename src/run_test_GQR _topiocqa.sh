@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=test_topiocqa
 #SBATCH --mail-type="ALL"
-#SBATCH --time=04:00:00
-#SBATCH --partition=amd-gpu-short
+#SBATCH --time=7-00:00:00
+#SBATCH --partition=amd-gpu-long
 #SBATCH --output=%x_%j.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=20
@@ -37,18 +37,40 @@ echo "## Checking status of CUDA device with nvidia-smi"
 nvidia-smi
 
 # # run script!
-echo "## Running testing script on qrecc dataset!"
+echo "## Running testing script on topiocqa dataset!"
 dataset_dir='/home/wangym/data1/dataset/'
 model_dir='/home/wangym/data1/model/'
 output_dir='/home/wangyme/data1/output/convgqr/'
 dataset='topiocqa'
-decode_type='answer' # "oracle" for rewrite and "answer" for expansion
-model_checkpoint_path="${model_dir}convgqr/train_${dataset}/KD-ANCE-prefix-${decode_type}-best-model-checkpoint"
-test_file_path="${dataset_dir}${dataset}/dev_new.json"
-output_file_path="${output_dir}${dataset}/test_QRIR_${decode_type}_prefix.json"
+decode_type='oracle' # "oracle" for rewrite (trained on qrecc) and "answer" for expansion (trained on topiocqa)
 
-# to train with checkpoint, specify --train_from_checkpoint 
-python test_GQR.py --model_checkpoint_path=$model_checkpoint_path \
+if [ "$dataset" = "qrecc" ]; then
+  if [ "$decode_type" = "oracle" ]; then
+    model_checkpoint_path="${model_dir}convgqr/train_qrecc/KD-ANCE-prefix-${decode_type}-best-model-checkpoint"
+    test_file_path="${dataset_dir}${dataset}/new_preprocessed/test.json"
+    output_file_path="${output_dir}${dataset}/test_QRIR_${decode_type}_prefix.json"
+  elif [ "$decode_type" = "answer" ]; then
+    model_checkpoint_path="${model_dir}convgqr/train_topiocqa/KD-ANCE-prefix-${decode_type}-best-model-checkpoint"
+    test_file_path="${dataset_dir}${dataset}/new_preprocessed/test.json"
+    output_file_path="${output_dir}${dataset}/test_QRIR_${decode_type}_prefix.json"
+  fi
+elif [ "$dataset" = "topiocqa" ]; then
+  if [ "$decode_type" = "oracle" ]; then
+    model_checkpoint_path="${model_dir}convgqr/train_qrecc/KD-ANCE-prefix-${decode_type}-best-model-checkpoint"
+    test_file_path="${dataset_dir}${dataset}/dev_new.json"
+    output_file_path="${output_dir}${dataset}/test_QRIR_${decode_type}_prefix.json"
+  elif [ "$decode_type" = "answer" ]; then
+    model_checkpoint_path="${model_dir}convgqr/train_topiocqa/KD-ANCE-prefix-${decode_type}-best-model-checkpoint"
+    test_file_path="${dataset_dir}${dataset}/dev_new.json"
+    output_file_path="${output_dir}${dataset}/test_QRIR_${decode_type}_prefix.json"
+  fi
+fi
+
+echo $model_checkpoint_path
+echo $test_file_path
+echo $output_file_path
+
+/data1/wangym/conda/envs/convgqr/bin/python test_GQR.py --model_checkpoint_path=$model_checkpoint_path \
   --test_file_path=$test_file_path \
   --output_file_path=$output_file_path \
   --collate_fn_type="flat_concat_for_test" \

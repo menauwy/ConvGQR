@@ -83,3 +83,7 @@ Now, we can perform retrieval to evaluate the reformulated queries by running:
     
     # for spase retrieval, dataset_name includes "qrecc" and "topiocqa"
     python bm25_{dataset_name}.py --config=Config/bm25_{dataset_name}.toml
+
+    # Updated: for sparse: 
+    First run: test_GQR.py to get query rewrites and query expansions
+    Then run: bm_25_{dataset_name}.py

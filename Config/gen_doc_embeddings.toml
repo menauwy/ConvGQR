@@ -7,20 +7,25 @@
 
 # [Model]
 model_type = "ANCE"
-pretrained_passage_encoder = "checkpoints/ad-hoc-ance-msmarco"   # passage encoder!!!
+# pretrained_passage_encoder = "checkpoints/ad-hoc-ance-msmarco"   # passage encoder!!!
+pretrained_passage_encoder = "/home/wangym/data1/model/pretrained/ance-msmarco-passage"
 max_seq_length = 384
 
 # [Gen]
 per_gpu_eval_batch_size = 250
 local_rank = -1 # Not use distributed training
 disable_tqdm = false
-n_gpu = 2
+n_gpu = 1
+
+# [Dataset]
+#dataset = "topiocqa"
+dataset = "qrecc"
 
 # [Input Data]
-# tokenized_passage_collection_dir_path = "datasets/topiocqa/tokenized"
-tokenized_passage_collection_dir_path = "datasets/cast/tokenized"
+#tokenized_passage_collection_dir_path = "/home/wangym/data1/dataset/topiocqa/tokenized"
+tokenized_passage_collection_dir_path = "/home/wangym/data1/dataset/qrecc/tokenized"
 
 
 # [Output]
-# data_output_path = "datasets/topiocqa/embeddings"
-data_output_path = "datasets/cast/embeds"
+#data_output_path = "/home/wangym/data1/dataset/topiocqa/embeddings"
+data_output_path = "/home/wangym/data1/dataset/qrecc/embeddings"

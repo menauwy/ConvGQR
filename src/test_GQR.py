@@ -35,9 +35,9 @@ def inference_t5qr(args):
     if args.n_gpu > 1:
         query_encoder = torch.nn.DataParallel(query_encoder, device_ids = list(range(args.n_gpu)))
 
-    if args.decode_type == "oracle":
+    if args.dataset == "qrecc": #16451
         test_dataset = T5RewriterDataset_qrecc(args, tokenizer, args.test_file_path)
-    elif args.decode_type == "answer":
+    elif args.dataset == "topiocqa":
         test_dataset = T5RewriterDataset_topiocqa(args, tokenizer, args.test_file_path)   
 
     args.batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
@@ -89,11 +89,13 @@ def inference_t5qr(args):
 def get_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--model_checkpoint_path", type=str, default="/home/wangym/data1/model/convgqr/train_qrecc/KD-ANCE-prefix-oracle-best-model")
-    parser.add_argument("--test_file_path", type=str, default="datasets/qrecc/new_preprocessed/test.json")
-    parser.add_argument('--output_file_path', type=str, default="output/qrecc/QR/test_QRIR_oracle_prefix.json")
+    parser.add_argument("--dataset", type=str, default="qrecc")
+    # best-model-checkpoint is the final model checkpoint
+    parser.add_argument("--model_checkpoint_path", type=str, default="/home/wangym/data1/model/convgqr/train_qrecc/KD-ANCE-prefix-oracle-best-model-checkpoint")
+    parser.add_argument("--test_file_path", type=str, default="/home/wangym/data1/dataset/qrecc/new_preprocessed/test.json")
+    parser.add_argument('--output_file_path', type=str, default="/home/wangym/data1/output/convgqr/qrecc/test_QRIR_oracle_prefix.json")
     parser.add_argument("--collate_fn_type", type=str, default="flat_concat_for_test")
-    parser.add_argument("--decode_type", type=str, default="oracle")
+    parser.add_argument("--decode_type", type=str, default="oracle")# oracle for rewrites and answer for expansion
     parser.add_argument("--model_type", type=str, default="T5")
     parser.add_argument("--use_last_response", type=bool, default=False)
     parser.add_argument("--use_prefix", type=bool, default=True)

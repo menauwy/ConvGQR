@@ -1,3 +1,7 @@
+"""
+First round training is stored in best-model,
+second round training from checkpoint is store in best-model-checkpoint, which is the final version
+"""
 #from IPython import embed
 import logging
 import sys

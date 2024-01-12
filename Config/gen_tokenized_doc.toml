@@ -3,19 +3,25 @@ title = "tokenizing the collection (all passaages) for later embedding generatio
 
 # [Model]
 model_type = "ANCE"
-pretrained_passage_encoder = "checkpoints/ad-hoc-ance-msmarco"   # passage encoder!!!
+# pretrained_passage_encoder = "checkpoints/ad-hoc-ance-msmarco"   # passage encoder!!!
+pretrained_passage_encoder = "/home/wangym/data1/model/pretrained/ance-msmarco-passage"
 max_seq_length = 384    # The maximum total input sequence length after tokenization. Sequences longer than this will be truncated, sequences shorter will be padded."
 max_doc_character = 10000   # used before tokenizer to save tokenizer latency
 
+# [Dataset]
+#dataset = "topiocqa"
+dataset = "qrecc"
 
 # [Input Data]
 # raw_collection_path = "datasets/topiocqa/full_wiki_segments.tsv"
-# raw_collection_path = "datasets/qrecc/qrecc_collection.tsv"
-raw_collection_path = "datasets/cast/collection.tsv"
+# raw_collection_path = "/home/wangym/data1/dataset/topiocqa/full_wiki_segments.tsv"
+raw_collection_path = "/home/wangym/data1/dataset/qrecc/new_preprocessed/qrecc_collection.tsv"
+# raw_collection_path = "datasets/cast/collection.tsv"
 
 
 # [Output]
 
 # data_output_path = "datasets/topiocqa/tokenized"
-# data_output_path = "datasets/qrecc/tokenized"
-data_output_path = "datasets/cast/tokenized"
+# data_output_path = "/home/wangym/data1/dataset/topiocqa/tokenized"
+data_output_path = "/home/wangym/data1/dataset/qrecc/tokenized"
+# data_output_path = "datasets/cast/tokenized"

@@ -1,8 +1,13 @@
+"""
+Adaption to ALICE time limitation:
+1. stop running after writing each block (10000 batches with 250 batch size).
+2. make sure that the seed is the same and dataload works fine.
+"""
 import sys
-
 sys.path += ['../']
 import torch
 import os
+import math
 from utils import (
     barrier_array_merge,
     StreamingDataset,
@@ -29,6 +34,17 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+def get_block_id(args):
+    """
+    Get the block id of the last saved block file
+    """
+    block_id = -1 # means no block file exists
+    for file in os.listdir(args.data_output_path):
+        if file.startswith("passage_emb_block_"):
+            tmp_block_id = int(file.split(".")[0].split("_")[-1])
+            if tmp_block_id > block_id:
+                block_id = tmp_block_id
+    return block_id
 
 def GetProcessingFn(args, query=False):
     """
@@ -86,23 +102,36 @@ def InferenceEmbeddingFromStreamDataLoader(
         dist.barrier()
     model.eval()
 
-    tmp_n = 0
+    tmp_n = 0 # batch number
     expect_per_block_passage_num = 2500000 # 54573064 38636512
     block_size = expect_per_block_passage_num // eval_batch_size # 10000
-    block_id = 0
     total_write_passages = 0
 
+    flag = False
+    saved_block_id = get_block_id(args)
+    print("######### {} block files have been saved".format(saved_block_id))
+    block_id = saved_block_id + 1 if saved_block_id >=0 else 0
     for batch in tqdm(train_dataloader,
                     desc="Inferencing",
                     disable=args.disable_tqdm,
                     position=0,
                     leave=True):
-
+        
+         # Skip batches until we reach the start number
+        if saved_block_id >= 0 and tmp_n < (saved_block_id + 1) * block_size:
+            tmp_n += 1
+            continue
+        if flag == False:
+            print("########## Starting batch number:", tmp_n)
+            flag = True
         #if batch[3][-1] <= 19999999:
         #    logger.info("Current {} ".format(batch[3][-1]))
         #    continue
-
+        
         idxs = batch[3].detach().numpy()  # [#B]
+        
+        # print('batch size: ', batch[0][0][:10]) ##### for test #####
+        # print("idxs: ", idxs[-1]) ##### for test #####
 
         batch = tuple(t.to(args.device) for t in batch)
         with torch.no_grad():
@@ -124,12 +153,12 @@ def InferenceEmbeddingFromStreamDataLoader(
             embedding2id.append(idxs)
             embedding.append(embs)
         
-        tmp_n += 1 # batch number
+        tmp_n += 1 # batch number, right place! following statements are just for storing and desplay
         if tmp_n % 500 == 0:
             logger.info("Have processed {} batches...".format(tmp_n))
 
         # save embedding info in blocks
-        if tmp_n % block_size == 0:
+        if tmp_n % block_size == 0 and tmp_n > block_id * block_size:
             embedding = np.concatenate(embedding, axis=0)
             embedding2id = np.concatenate(embedding2id, axis=0)
             emb_block_path = os.path.join(args.data_output_path, "passage_emb_block_{}.pb".format(block_id))
@@ -142,11 +171,23 @@ def InferenceEmbeddingFromStreamDataLoader(
             block_id += 1
 
             logger.info("Have written {} passages...".format(total_write_passages))
+            print("Memory usage: embeddings {} bytes, embedding2id {} bytes".format(sys.getsizeof(embedding), sys.getsizeof(embedding2id)))
             embedding = []
             embedding2id = []
             gc.collect()
-
-    # concatenate all embeddings and save
+            break
+    
+    # if args.dataset == "qrecc":
+    #     if block_id < math.ceil(54573064 / expect_per_block_passage_num): #start wtih 0
+    #         return
+    #     else:
+    #         pass
+    # elif args.dataset == "topiocqa":
+    #     if block_id < math.ceil(38636512 / expect_per_block_passage_num):
+    #         return
+    #     else:
+    #         pass
+    ########## concatenate all embeddings and save ##########
     if len(embedding) > 0:   
         embedding = np.concatenate(embedding, axis=0)
         embedding2id = np.concatenate(embedding2id, axis=0)
@@ -159,6 +200,7 @@ def InferenceEmbeddingFromStreamDataLoader(
             pickle.dump(embedding2id, handle, protocol=4)
         total_write_passages += len(embedding)
         block_id += 1
+
 
     logger.info("total write passages {}".format(total_write_passages))
     # return embedding, embedding2id

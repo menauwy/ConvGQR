@@ -464,9 +464,7 @@ def statis_info(inputfile, statis_oracle):
 if __name__ == "__main__":
     # original local data dir
     dataset_dir = "/home/wangym/data1/dataset/qrecc/"
-    # move data dir in /scratchdata on the assigned computing node
-    #dataset_dir = "/scratcgdata/{}/{}/".format(os.environ["SLURM_JOB_USER"], os.environ["SLURM_JOB_ID"])
-
+    
     input_passage_dir = dataset_dir + "collection-paragraph"
     output_file = dataset_dir + "new_preprocessed/qrecc_collection.tsv"
     pid2rawpid_path = dataset_dir + "new_preprocessed/pid2rawpid.pkl"

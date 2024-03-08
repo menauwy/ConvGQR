@@ -70,8 +70,12 @@ fi
 echo $model_checkpoint_path
 echo $test_file_path
 echo $output_file_path
-
-/data1/wangym/conda/envs/convgqr/bin/python test_GQR.py --dataset=$dataset \
+# /home/wangym/data1/model/convgqr/train_qrecc/KD-ANCE-prefix-oracle-best-model-checkpoint
+# /home/wangym/data1/dataset/qrecc/new_preprocessed/test.json
+# /home/wangyme/data1/output/convgqr/qrecc/test_QRIR_oracle_prefix.json
+# usage: test_GQR.py [-h] [--dataset DATASET]
+/data1/wangym/conda/envs/convgqr/bin/python test_GQR.py \
+  --dataset=$dataset \
   --model_checkpoint_path=$model_checkpoint_path \
   --test_file_path=$test_file_path \
   --output_file_path=$output_file_path \
@@ -81,8 +85,6 @@ echo $output_file_path
   --max_query_length=32 \
   --max_doc_length=384 \
   --max_response_length=32 \
-  --max_concat_length=512 \ 
+  --max_concat_length=512
 
 echo "############### Testing Done!"
-# # store data back to local , only copying files that have changed
-#rsync -av --update $scratch_dir/* $data_dir

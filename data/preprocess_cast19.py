@@ -1,3 +1,9 @@
+"""
+3 collections: TREC-CAR, MS MARCO, Washington Post
+https://github.com/daltonj/treccastweb/tree/master
+MS MARCO and WAPO have duplicated passages, check gitgub for deduplication (duplicate files)
+https://boston.lti.cs.cmu.edu/Services/treccast19/duplicate_description.txt
+"""
 import argparse
 from trec_car import read_data
 from tqdm import tqdm
@@ -11,10 +17,11 @@ NUM_FOLD = 3
 
 def parse_sim_file(filename):
     """
-    Reads the deduplicated documents file and stores the 
-    duplicate passage ids into a dictionary
+    Reads the deduplicated documents file and marks the 
+    duplicate passage ids with 1
+    https://boston.lti.cs.cmu.edu/Services/treccast19/duplicate_description.txt
     """
-
+    # ex: MARCO_135:MARCO_4002,MARCO_5003
     sim_dict = {}
     lines = open(filename).readlines()
     for line in lines:
@@ -29,17 +36,16 @@ def parse_sim_file(filename):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    #parser.add_argument("--car_cbor", type=str)
-    #parser.add_argument("--msmarco_collection", type=str)
-    #parser.add_argument("--duplicate_file", type=str)
-    parser.add_argument("--cast_dir", type=str, default="./")
-
-    parser.add_argument("--out_data_dir", type=str, default="./")
-    parser.add_argument("--out_collection_dir", type=str, default="../cast20")
+    parser.add_argument("--car_cbor", type=str, default="/home/wangym/data1/dataset/cast19/trec_car/paragraphCorpus/dedup.articles-paragraphs.cbor")
+    parser.add_argument("--msmarco_collection", type=str, default="/home/wangym/data1/dataset/cast19/msmarco/collection.tsv")
+    parser.add_argument("--duplicate_file", type=str, default="/home/wangym/data1/dataset/cast19/msmarco/duplicate_list_v1.0.txt")
+    parser.add_argument("--cast_dir", type=str, default="/home/wangym/data1/dataset/cast19") # "./"
+    parser.add_argument("--out_data_dir", type=str, default="/home/wangym/data1/dataset/cast19/processed")
+    parser.add_argument("--out_collection_dir", type=str, default="/home/wangym/data1/dataset/cast19/processed") # ../cast20
     args = parser.parse_args()
 
     # INPUT
-    #sim_file = args.duplicate_file
+    sim_file = args.duplicate_file
     cast_topics_raw_file = os.path.join(args.cast_dir,
                                         "evaluation_topics_v1.0.json")
     cast_topics_manual_file = os.path.join(
@@ -90,6 +96,7 @@ if __name__ == "__main__":
             with open(args.msmarco_collection, "r") as m:
                 for line in tqdm(m):
                     marco_id, text = line.strip().split("\t")
+                    # row format: 0 plain_text
                     if ("MARCO_" + marco_id) in sim_dict:
                         removed += 1
                         continue
@@ -102,72 +109,72 @@ if __name__ == "__main__":
             pickle.dump(car_idx_to_id, f)
 
     # 2. Process queries
-    print("Processing CAsT utterances...")
-    with open(cast_topics_raw_file, "r") as fin:
-        raw_data = json.load(fin)
+    # print("Processing CAsT utterances...")
+    # with open(cast_topics_raw_file, "r") as fin:
+    #     raw_data = json.load(fin)
 
-    with open(cast_topics_manual_file, "r") as fin:
-        annonated_lines = fin.readlines()
+    # with open(cast_topics_manual_file, "r") as fin:
+    #     annonated_lines = fin.readlines()
 
-    out_raw_queries = open(out_raw_queries_file, "w")
-    out_manual_queries = open(out_manual_queries_file, "w")
+    # out_raw_queries = open(out_raw_queries_file, "w")
+    # out_manual_queries = open(out_manual_queries_file, "w")
 
-    all_annonated = {}
-    for line in annonated_lines:
-        splitted = line.split('\t')
-        out_manual_queries.write(line)
-        topic_query = splitted[0]
-        query = splitted[1].strip()
-        topic_id = topic_query.split('_')[0]
-        query_id = topic_query.split('_')[1]
-        if topic_id not in all_annonated:
-            all_annonated[topic_id] = {}
-        all_annonated[topic_id][query_id] = query
-    out_manual_queries.close()
+    # all_annonated = {}
+    # for line in annonated_lines:
+    #     splitted = line.split('\t')
+    #     out_manual_queries.write(line)
+    #     topic_query = splitted[0]
+    #     query = splitted[1].strip()
+    #     topic_id = topic_query.split('_')[0]
+    #     query_id = topic_query.split('_')[1]
+    #     if topic_id not in all_annonated:
+    #         all_annonated[topic_id] = {}
+    #     all_annonated[topic_id][query_id] = query
+    # out_manual_queries.close()
 
-    topic_number_dict = {}
-    data = []
-    for group in raw_data:
-        topic_number, description, turn, title = str(
-            group['number']), group.get('description',
-                                        ''), group['turn'], group.get(
-                                            'title', '')
-        queries = []
-        for query in turn:
-            query_number, raw_utterance = str(
-                query['number']), query['raw_utterance']
-            queries.append(raw_utterance)
-            record = {}
-            record['id'] = topic_number + '-' + query_number
-            record['topic_number'] = topic_number
-            record['query_number'] = query_number
-            record['description'] = description
-            record['title'] = title
-            record['input'] = copy.deepcopy(queries)
-            record['target'] = all_annonated[topic_number][query_number]
-            out_raw_queries.write("{}-{}\t{}\n".format(topic_number,
-                                                       query_number,
-                                                       raw_utterance))
-            if not topic_number in topic_number_dict:
-                topic_number_dict[topic_number] = len(topic_number_dict)
-            data.append(record)
-    out_raw_queries.close()
+    # topic_number_dict = {}
+    # data = []
+    # for group in raw_data:
+    #     topic_number, description, turn, title = str(
+    #         group['number']), group.get('description',
+    #                                     ''), group['turn'], group.get(
+    #                                         'title', '')
+    #     queries = []
+    #     for query in turn:
+    #         query_number, raw_utterance = str(
+    #             query['number']), query['raw_utterance']
+    #         queries.append(raw_utterance)
+    #         record = {}
+    #         record['id'] = topic_number + '-' + query_number
+    #         record['topic_number'] = topic_number
+    #         record['query_number'] = query_number
+    #         record['description'] = description
+    #         record['title'] = title
+    #         record['input'] = copy.deepcopy(queries)
+    #         record['target'] = all_annonated[topic_number][query_number]
+    #         out_raw_queries.write("{}-{}\t{}\n".format(topic_number,
+    #                                                    query_number,
+    #                                                    raw_utterance))
+    #         if not topic_number in topic_number_dict:
+    #             topic_number_dict[topic_number] = len(topic_number_dict)
+    #         data.append(record)
+    # out_raw_queries.close()
 
-    with open(out_topics_file, 'w') as fout:
-        for item in data:
-            json_str = json.dumps(item)
-            fout.write(json_str + '\n')
+    # with open(out_topics_file, 'w') as fout:
+    #     for item in data:
+    #         json_str = json.dumps(item)
+    #         fout.write(json_str + '\n')
 
-    # Split eval data into K-fold
+    # # Split eval data into K-fold
     
-    topic_per_fold = len(topic_number_dict) // NUM_FOLD
-    for i in range(NUM_FOLD):
-        with open(out_topics_file + "." + str(i), 'w') as fout:
-            for item in data:
-                idx = topic_number_dict[item['topic_number']]
-                if idx // topic_per_fold == i:
-                    json_str = json.dumps(item)
-                    fout.write(json_str + '\n')
+    # topic_per_fold = len(topic_number_dict) // NUM_FOLD
+    # for i in range(NUM_FOLD):
+    #     with open(out_topics_file + "." + str(i), 'w') as fout:
+    #         for item in data:
+    #             idx = topic_number_dict[item['topic_number']]
+    #             if idx // topic_per_fold == i:
+    #                 json_str = json.dumps(item)
+    #                 fout.write(json_str + '\n')
     
 
     # 3. Process and convert qrels

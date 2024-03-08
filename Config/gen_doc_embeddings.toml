@@ -18,14 +18,14 @@ disable_tqdm = false
 n_gpu = 1
 
 # [Dataset]
-#dataset = "topiocqa"
-dataset = "qrecc"
+dataset = "topiocqa"
+#dataset = "qrecc"
 
 # [Input Data]
-#tokenized_passage_collection_dir_path = "/home/wangym/data1/dataset/topiocqa/tokenized"
-tokenized_passage_collection_dir_path = "/home/wangym/data1/dataset/qrecc/tokenized"
+tokenized_passage_collection_dir_path = "/home/wangym/data1/dataset/topiocqa/tokenized"
+#tokenized_passage_collection_dir_path = "/home/wangym/data1/dataset/qrecc/tokenized"
 
 
 # [Output]
-#data_output_path = "/home/wangym/data1/dataset/topiocqa/embeddings"
-data_output_path = "/home/wangym/data1/dataset/qrecc/embeddings"
+data_output_path = "/home/wangym/data1/dataset/topiocqa/embeddings"
+#data_output_path = "/home/wangym/data1/dataset/qrecc/embeddings"

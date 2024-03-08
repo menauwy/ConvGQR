@@ -109,7 +109,8 @@ def InferenceEmbeddingFromStreamDataLoader(
 
     flag = False
     saved_block_id = get_block_id(args)
-    print("######### {} block files have been saved".format(saved_block_id))
+    saved_block_id = args.saved_block_id ###### for parallel generating
+    print("######### {} block files have been saved".format(saved_block_id + 1))
     block_id = saved_block_id + 1 if saved_block_id >=0 else 0
     for batch in tqdm(train_dataloader,
                     desc="Inferencing",
@@ -120,6 +121,7 @@ def InferenceEmbeddingFromStreamDataLoader(
          # Skip batches until we reach the start number
         if saved_block_id >= 0 and tmp_n < (saved_block_id + 1) * block_size:
             tmp_n += 1
+            #print("########## skip this batch")
             continue
         if flag == False:
             print("########## Starting batch number:", tmp_n)
@@ -187,7 +189,7 @@ def InferenceEmbeddingFromStreamDataLoader(
     #         return
     #     else:
     #         pass
-    ########## concatenate all embeddings and save ##########
+    ########## for the last chunk of batches ##########
     if len(embedding) > 0:   
         embedding = np.concatenate(embedding, axis=0)
         embedding2id = np.concatenate(embedding2id, axis=0)
@@ -275,14 +277,16 @@ def ann_data_gen(args):
 def get_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument(
-        "--config",
-        type=str,
-        required=True)
+    parser.add_argument("--config", type=str, required=True)
+    parser.add_argument("--saved_block_id", type=int, default=0)
 
     args = parser.parse_args()
     config = toml.load(args.config)
-    args = argparse.Namespace(**config)
+
+    # Merge command line args with config file args
+    # args = argparse.Namespace(**config)
+    for key, value in config.items():
+        setattr(args, key, value)
     args.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     check_dir_exist_or_build([args.data_output_path])
     

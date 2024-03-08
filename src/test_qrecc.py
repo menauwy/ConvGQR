@@ -1,4 +1,8 @@
-from IPython import embed
+"""
+How do they implement cross validation main()?
+TODO: add test_{dataset}.toml in Config
+"""
+# from IPython import embed
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -29,7 +33,7 @@ import pytrec_eval
 #os.environ["CUDA_VISIBLE_DEVICES"]="0, 1"
 
 '''
-Test process, perform dense retrieval on collection (e.g., MS MARCO):
+Original: Test process, perform dense retrieval on collection (e.g., MS MARCO):
 1. get args
 2. establish index with Faiss on GPU for fast dense retrieval
 3. load the model, build the test query dataset/dataloader, and get the query embeddings. 
@@ -55,7 +59,7 @@ def build_faiss_index(args):
         #embed()
         #input()
 
-    cpu_index = faiss.IndexFlatIP(768)  
+    cpu_index = faiss.IndexFlatIP(768) # innerproduct index measure. 768 dim
     index = None
     if args.use_gpu:
         co = faiss.GpuMultipleClonerOptions()
@@ -115,6 +119,7 @@ def search_one_by_one_with_faiss(args, passge_embeddings_dir, index, query_embed
             'time cost per query': elapse / query_embeddings.shape[0]
         })
 
+        # candidate matrix of score and passage id
         candidate_id_matrix = passage_embedding2id[I] # passage_idx -> passage_id
         D = D.tolist()
         candidate_id_matrix = candidate_id_matrix.tolist()
@@ -135,7 +140,7 @@ def search_one_by_one_with_faiss(args, passge_embeddings_dir, index, query_embed
             merged_candidate_matrix = candidate_matrix
             continue
         
-        # merge
+        # merge based on score
         merged_candidate_matrix_tmp = copy.deepcopy(merged_candidate_matrix)
         merged_candidate_matrix = []
         for merged_list, cur_list in zip(merged_candidate_matrix_tmp,
@@ -155,7 +160,7 @@ def search_one_by_one_with_faiss(args, passge_embeddings_dir, index, query_embed
             while p2 < topN:
                 merged_candidate_matrix[-1].append(cur_list[p2])
                 p2 += 1
-
+    # all have been merged, decompose to D, I
     merged_D, merged_I = [], []
     for merged_list in merged_candidate_matrix: # len(merged_candidate_matrix) = query_nums len([0]) = query_num * topk
         merged_D.append([])
@@ -173,15 +178,16 @@ def search_one_by_one_with_faiss(args, passge_embeddings_dir, index, query_embed
 def get_test_query_embedding(args):
     set_seed(args)
 
-    passage_tokenizer, _ = load_model(args.model_type + "_Passage", args.pretrained_passage_encoder)
+    # passage_tokenizer, _ = load_model(args.model_type + "_Passage", args.pretrained_passage_encoder)
     query_tokenizer, query_encoder = load_model(args.model_type + "_Query", args.query_encoder_checkpoint)
     query_encoder = query_encoder.to(args.device)
     
 
     # test dataset/dataloader
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
-    logger.info("Buidling test dataset...")
+    logger.info("Building test dataset...")
 
+    #TODO:
     test_dataset = ConvDataset_rewrite(args, query_tokenizer, args.test_file_path)
     test_loader = DataLoader(test_dataset, 
                             batch_size = args.eval_batch_size, 
@@ -208,7 +214,7 @@ def get_test_query_embedding(args):
             query_encoder.eval()
             batch_sample_id = batch["bt_sample_id"]
             
-            # test type
+            # TODO: test type
             if args.test_type == "oracle":
                 input_ids = batch["bt_oracle_query"].to(args.device)
                 input_masks = batch["bt_oracle_query_mask"].to(args.device)

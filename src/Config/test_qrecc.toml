@@ -35,8 +35,8 @@ eval_type = "oracle"
 
 
 # test_file_path = "datasets/qrecc/new_preprocessed/test.json"
-test_file_path = "output/qrecc/QR/test_QRIR_oracle_prefix.json"
-test_file_path_2 = "output/qrecc/QR/test_QRIR_KD_answer_prefix.json"
+test_file_path = "/home/wangym/data1/output/convgqr/qrecc/test_QRIR_oracle_prefix.json"
+# test_file_path_2 = "output/qrecc/QR/test_QRIR_KD_answer_prefix.json"
 
 trec_gold_qrel_file_path = "datasets/qrecc/new_preprocessed/qrecc_qrel.tsv"
 # trec_gold_qrel_file_path = "datasets/qrecc/qrecc_qrel.tsv"

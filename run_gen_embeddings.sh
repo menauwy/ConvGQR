@@ -1,10 +1,11 @@
 #!/bin/bash
-#SBATCH --job-name=gen_qrecc_adapt_embeddiings
+#SBATCH --job-name=gen_topic_adapt_embeddiings
 #SBATCH --mail-type="ALL"
-#SBATCH --time=01:00:00
-#SBATCH --partition=amd-gpu-short
+#SBATCH --time=7-00:00:00
+#SBATCH --partition=amd-gpu-long
 #SBATCH --output=%x_%j.out
 #SBATCH --ntasks=1
+#SBATCH --cpus-per-task=10
 #SBATCH --gres=gpu:4g.40gb:1
 
 # making sure we load necessary module and activate right environment
@@ -35,6 +36,8 @@ echo "## Checking status of CUDA device with nvidia-smi"
 nvidia-smi
 
 # # run script!
-echo "## Generating passages embeddings for qrecc dataset!"
+echo "## Generating passages embeddings for topiocqa dataset!"
 # /data1/wangym/conda/envs/convgqr/bin/python gen_doc_embeddings.py --config Config/gen_doc_embeddings.toml
-/data1/wangym/conda/envs/convgqr/bin/python gen_doc_embeddings_adapted.py --config Config/gen_doc_embeddings.toml
+/data1/wangym/conda/envs/convgqr/bin/python gen_doc_embeddings_adapted.py \
+    --config Config/gen_doc_embeddings.toml \
+    --saved_block_id=7
